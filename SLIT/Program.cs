@@ -38,6 +38,13 @@ namespace MFConsoleApplication1
 {
     public class Program
     {
+        /***********************************************************************
+         * "Classic" attributes
+        ***********************************************************************/
+        static Thread currentStatusDisabler;
+        /***********************************************************************
+         * Constants
+        ***********************************************************************/
         // Constants used for buttons and sensors arrays
         const short PLASTIC = 0;
         const short METAL = 1;
@@ -71,8 +78,16 @@ namespace MFConsoleApplication1
         static short currentState = INTERNAL_SLEEPING;
         static short expectedId; // Actually, it is the ID of the latest pressed button or activated sensor
 
+        // Timeouts
+        static int[] TIMEOUTS = new int[NUMBER_OF_PUBLIC_STATES];
+
         public static void Main()
         {
+            TIMEOUTS[PUBLIC_ERROR] = 10000;
+            TIMEOUTS[PUBLIC_WAITING] = 10000;
+            TIMEOUTS[PUBLIC_OK] = 10000;
+
+
             initializePorts();
 
             // Signal startup to the operator (12 has been arbitrary choosen)
@@ -144,6 +159,7 @@ namespace MFConsoleApplication1
                 expectedId = pressedButton;
                 notify(PUBLIC_WAITING);
             }
+            waitAndDisableStatus();
         }
         public static void onSensorPlastic(uint port, uint state, DateTime time) { onSensor(PLASTIC); }
         public static void onSensorMetal(uint port, uint state, DateTime time) { onSensor(METAL); }
@@ -165,6 +181,7 @@ namespace MFConsoleApplication1
                 expectedId = activedSensor;
                 notify(PUBLIC_WAITING);
             }
+            waitAndDisableStatus();
         }
         public static void notify(short state)
         {
@@ -173,6 +190,33 @@ namespace MFConsoleApplication1
                 leds[i].Write(false);
             if (0 <= state && state < NUMBER_OF_PUBLIC_STATES)
                 leds[state].Write(true);
+        }
+
+        public static void waitAndDisableStatus()
+        {
+            Thread thread = new Thread(_waitAndDisableStatus);
+            try
+            {
+                currentStatusDisabler.Abort();
+            }
+            catch (NullReferenceException) { } // No thread currently running
+            catch (ThreadAbortException) { } // This shouldn't happen, but we use it, just in case
+            currentStatusDisabler = thread;
+            thread.Start();
+        }
+        public static void _waitAndDisableStatus()
+        {
+            short publicState = -1;
+            for (short i = 0; i < NUMBER_OF_PUBLIC_STATES; i++)
+                publicState = i;
+            if (publicState == -1)
+                // Why was the function called? oO
+                return;
+            Thread.Sleep(TIMEOUTS[publicState]);
+            for (short i = 0; i < NUMBER_OF_PUBLIC_STATES; i++)
+                leds[i].Write(false);
+            currentState = INTERNAL_SLEEPING;
+            currentStatusDisabler = null;
         }
     }
 }

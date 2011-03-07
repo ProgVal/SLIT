@@ -13,11 +13,13 @@
 #include <TinyCLR_Interop.h>
 struct Library_SLIT_MFConsoleApplication1_Program
 {
-    static const int FIELD_STATIC__buttons = 0;
-    static const int FIELD_STATIC__sensors = 1;
-    static const int FIELD_STATIC__leds = 2;
-    static const int FIELD_STATIC__currentState = 3;
-    static const int FIELD_STATIC__expectedId = 4;
+    static const int FIELD_STATIC__currentStatusDisabler = 0;
+    static const int FIELD_STATIC__buttons = 1;
+    static const int FIELD_STATIC__sensors = 2;
+    static const int FIELD_STATIC__leds = 3;
+    static const int FIELD_STATIC__currentState = 4;
+    static const int FIELD_STATIC__expectedId = 5;
+    static const int FIELD_STATIC__TIMEOUTS = 6;
 
 
     //--//
@@ -26,7 +28,7 @@ struct Library_SLIT_MFConsoleApplication1_Program
 
 struct Library_SLIT_MFConsoleApplication1_Resources
 {
-    static const int FIELD_STATIC__manager = 5;
+    static const int FIELD_STATIC__manager = 7;
 
 
     //--//
