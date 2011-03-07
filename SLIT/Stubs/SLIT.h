@@ -13,15 +13,9 @@
 #include <TinyCLR_Interop.h>
 struct Library_SLIT_MFConsoleApplication1_Program
 {
-    static const int FIELD_STATIC__redLed = 0;
-    static const int FIELD_STATIC__yellowLed = 1;
-    static const int FIELD_STATIC__greenLed = 2;
-    static const int FIELD_STATIC__pressRuttonUpInterrupt = 3;
-    static const int FIELD_STATIC__pressRedButtonDownInterrupt = 4;
-    static const int FIELD_STATIC__pressBlackButtonInterrupt = 5;
-    static const int FIELD_STATIC__leds = 6;
-    static const int FIELD_STATIC__number = 7;
-    static const int FIELD_STATIC__lastInterrupt = 8;
+    static const int FIELD_STATIC__buttons = 0;
+    static const int FIELD_STATIC__sensors = 1;
+    static const int FIELD_STATIC__leds = 2;
 
 
     //--//
@@ -30,7 +24,7 @@ struct Library_SLIT_MFConsoleApplication1_Program
 
 struct Library_SLIT_MFConsoleApplication1_Resources
 {
-    static const int FIELD_STATIC__manager = 9;
+    static const int FIELD_STATIC__manager = 3;
 
 
     //--//
