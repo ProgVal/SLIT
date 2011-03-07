@@ -1,0 +1,15 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <FeatureName>SLIT</FeatureName>
+    <Guid>{62ddba8f-6db1-45fe-bc55-a54536681c6a}</Guid>
+    <Description />
+    <Groups />
+  </PropertyGroup>
+  <ItemGroup>
+    <DriverLibs Include="SLIT.$(LIB_EXT)" />
+    <InteropFeature Include="SLIT" />
+    <MMP_DAT_CreateDatabase Include="$(BUILD_TREE_CLIENT)\pe\SLIT.pe" />
+    <RequiredProjects Include="E:\lycee\PPE_CSharp\projet1\SLIT\SLIT\Stubs\dotnetmf.proj" />
+  </ItemGroup>
+</Project>
