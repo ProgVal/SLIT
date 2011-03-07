@@ -16,6 +16,8 @@ struct Library_SLIT_MFConsoleApplication1_Program
     static const int FIELD_STATIC__buttons = 0;
     static const int FIELD_STATIC__sensors = 1;
     static const int FIELD_STATIC__leds = 2;
+    static const int FIELD_STATIC__currentState = 3;
+    static const int FIELD_STATIC__expectedId = 4;
 
 
     //--//
@@ -24,7 +26,7 @@ struct Library_SLIT_MFConsoleApplication1_Program
 
 struct Library_SLIT_MFConsoleApplication1_Resources
 {
-    static const int FIELD_STATIC__manager = 3;
+    static const int FIELD_STATIC__manager = 5;
 
 
     //--//

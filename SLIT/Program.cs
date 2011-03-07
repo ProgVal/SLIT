@@ -42,7 +42,7 @@ namespace MFConsoleApplication1
         const short PLASTIC = 0;
         const short METAL = 1;
         const short GLASS = 2;
-        const short OTHERS = 3;
+        const short MISC = 3;
         const short NUMBER_OF_SENSORS = 4;
 
         // Constants use for leds array
@@ -61,6 +61,15 @@ namespace MFConsoleApplication1
         static InterruptPort[] buttons = new InterruptPort[NUMBER_OF_SENSORS];
         static InterruptPort[] sensors = new InterruptPort[NUMBER_OF_SENSORS];
         static OutputPort[] leds = new OutputPort[NUMBER_OF_PUBLIC_STATES];
+
+        // Internal state stuff
+        const short INTERNAL_SLEEPING = 0;
+        const short INTERNAL_WAITING_FOR_SENSOR = 1;
+        const short INTERNAL_WAITING_FOR_BUTTON = 2;
+        const short INTERNAL_WORKING = 3; // Used to be more thread-safe
+        const short INTERNAL_NOTIFYING = 4; // Intermediate state between WORKING and SLEEPING
+        static short currentState = INTERNAL_SLEEPING;
+        static short expectedId; // Actually, it is the ID of the latest pressed button or activated sensor
 
         public static void Main()
         {
@@ -89,45 +98,73 @@ namespace MFConsoleApplication1
             buttons[PLASTIC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di0, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
             buttons[METAL] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di1, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
             buttons[GLASS] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di2, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            buttons[OTHERS] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di3, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            buttons[MISC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di3, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
 
             // Initialize the button interruptions
-            buttons[PLASTIC].OnInterrupt += new NativeEventHandler(onPressButton);
-            buttons[METAL].OnInterrupt += new NativeEventHandler(onPressButton);
-            buttons[GLASS].OnInterrupt += new NativeEventHandler(onPressButton);
-            buttons[OTHERS].OnInterrupt += new NativeEventHandler(onPressButton);
+            buttons[PLASTIC].OnInterrupt += new NativeEventHandler(onButtonPlastic);
+            buttons[METAL].OnInterrupt += new NativeEventHandler(onButtonMetal);
+            buttons[GLASS].OnInterrupt += new NativeEventHandler(onButtonGlass);
+            buttons[MISC].OnInterrupt += new NativeEventHandler(onButtonMisc);
 
 
             // Initialize the sensors
             sensors[PLASTIC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di4, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
             sensors[METAL] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di5, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
             sensors[GLASS] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di6, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            sensors[OTHERS] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di7, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            sensors[MISC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di7, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
 
             // Initialize the sensors interruptions:
-            sensors[PLASTIC].OnInterrupt += new NativeEventHandler(onSensorHighEdge);
-            sensors[METAL].OnInterrupt += new NativeEventHandler(onSensorHighEdge);
-            sensors[GLASS].OnInterrupt += new NativeEventHandler(onSensorHighEdge);
-            sensors[OTHERS].OnInterrupt += new NativeEventHandler(onSensorHighEdge);
+            sensors[PLASTIC].OnInterrupt += new NativeEventHandler(onSensorPlastic);
+            sensors[METAL].OnInterrupt += new NativeEventHandler(onSensorMetal);
+            sensors[GLASS].OnInterrupt += new NativeEventHandler(onSensorGlass);
+            sensors[MISC].OnInterrupt += new NativeEventHandler(onSensorMisc);
 
             // Initiliaze the status LEDs (used for debugging purpose)
             leds[PUBLIC_ERROR] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.An0, false);
             leds[PUBLIC_WAITING] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.An1, false);
             leds[PUBLIC_OK] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.An2, false);
         }
-        public static void onPressButton(uint port, uint state, DateTime time)
+        public static void onButtonPlastic(uint port, uint state, DateTime time) { onButton(PLASTIC); }
+        public static void onButtonMetal(uint port, uint state, DateTime time) { onButton(METAL); }
+        public static void onButtonGlass(uint port, uint state, DateTime time) { onButton(GLASS); }
+        public static void onButtonMisc(uint port, uint state, DateTime time) { onButton(MISC); }
+        public static void onButton(short pressedButton)
         {
-            // This method is used by all buttons interruptions
-            short pressedButton;
-            pressedButton = (short)(port - FIRST_BUTTON_NUMBER);
-            notify(PUBLIC_WAITING);
+            if (currentState == INTERNAL_WAITING_FOR_BUTTON)
+            {
+                currentState = INTERNAL_NOTIFYING;
+                if (pressedButton == expectedId)
+                    notify(PUBLIC_OK);
+                else
+                    notify(PUBLIC_ERROR);
+            }
+            else
+            {
+                currentState = INTERNAL_WAITING_FOR_SENSOR;
+                expectedId = pressedButton;
+                notify(PUBLIC_WAITING);
+            }
         }
-        public static void onSensorHighEdge(uint port, uint state, DateTime time)
+        public static void onSensorPlastic(uint port, uint state, DateTime time) { onSensor(PLASTIC); }
+        public static void onSensorMetal(uint port, uint state, DateTime time) { onSensor(METAL); }
+        public static void onSensorGlass(uint port, uint state, DateTime time) { onSensor(GLASS); }
+        public static void onSensorMisc(uint port, uint state, DateTime time) { onSensor(MISC); }
+        public static void onSensor(short activedSensor)
         {
-            // This method is used by all sensors interruptions
-            short activedSensor;
-            activedSensor = (short)(port - FIRST_SENSOR_NUMBER);
-            notify(PUBLIC_WAITING);
+            if (currentState == INTERNAL_WAITING_FOR_SENSOR)
+            {
+                currentState = INTERNAL_NOTIFYING;
+                if (activedSensor == expectedId)
+                    notify(PUBLIC_OK);
+                else
+                    notify(PUBLIC_ERROR);
+            }
+            else
+            {
+                currentState = INTERNAL_WAITING_FOR_BUTTON;
+                expectedId = activedSensor;
+                notify(PUBLIC_WAITING);
+            }
         }
         public static void notify(short state)
         {

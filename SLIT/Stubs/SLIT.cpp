@@ -22,12 +22,20 @@ static const CLR_RT_MethodHandler method_lookup[] =
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    NULL,
 };
 
 const CLR_RT_NativeAssemblyData g_CLR_AssemblyNative_SLIT =
 {
     "SLIT", 
-    0x50DD2669,
+    0x7C6ACF2B,
     method_lookup
 };
 
