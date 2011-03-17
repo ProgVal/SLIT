@@ -48,7 +48,7 @@ namespace MFConsoleApplication1
         // Constants used for buttons and sensors arrays
         const short PLASTIC = 0;
         const short METAL = 1;
-        const short GLASS = 2;
+        const short PAPER = 2;
         const short MISC = 3;
         const short NUMBER_OF_SENSORS = 4;
 
@@ -112,26 +112,26 @@ namespace MFConsoleApplication1
             // Initialize the buttons
             buttons[PLASTIC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di0, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
             buttons[METAL] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di1, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            buttons[GLASS] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di2, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            buttons[PAPER] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di2, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
             buttons[MISC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di3, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
 
             // Initialize the button interruptions
             buttons[PLASTIC].OnInterrupt += new NativeEventHandler(onButtonPlastic);
             buttons[METAL].OnInterrupt += new NativeEventHandler(onButtonMetal);
-            buttons[GLASS].OnInterrupt += new NativeEventHandler(onButtonGlass);
+            buttons[PAPER].OnInterrupt += new NativeEventHandler(onButtonPAPER);
             buttons[MISC].OnInterrupt += new NativeEventHandler(onButtonMisc);
 
 
             // Initialize the sensors
             sensors[PLASTIC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di4, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
             sensors[METAL] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di5, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            sensors[GLASS] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di6, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            sensors[PAPER] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di6, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
             sensors[MISC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di7, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
 
             // Initialize the sensors interruptions:
             sensors[PLASTIC].OnInterrupt += new NativeEventHandler(onSensorPlastic);
             sensors[METAL].OnInterrupt += new NativeEventHandler(onSensorMetal);
-            sensors[GLASS].OnInterrupt += new NativeEventHandler(onSensorGlass);
+            sensors[PAPER].OnInterrupt += new NativeEventHandler(onSensorPAPER);
             sensors[MISC].OnInterrupt += new NativeEventHandler(onSensorMisc);
 
             // Initiliaze the status LEDs (used for debugging purpose)
@@ -141,7 +141,7 @@ namespace MFConsoleApplication1
         }
         public static void onButtonPlastic(uint port, uint state, DateTime time) { onButton(PLASTIC); }
         public static void onButtonMetal(uint port, uint state, DateTime time) { onButton(METAL); }
-        public static void onButtonGlass(uint port, uint state, DateTime time) { onButton(GLASS); }
+        public static void onButtonPAPER(uint port, uint state, DateTime time) { onButton(PAPER); }
         public static void onButtonMisc(uint port, uint state, DateTime time) { onButton(MISC); }
         public static void onButton(short pressedButton)
         {
@@ -163,7 +163,7 @@ namespace MFConsoleApplication1
         }
         public static void onSensorPlastic(uint port, uint state, DateTime time) { onSensor(PLASTIC); }
         public static void onSensorMetal(uint port, uint state, DateTime time) { onSensor(METAL); }
-        public static void onSensorGlass(uint port, uint state, DateTime time) { onSensor(GLASS); }
+        public static void onSensorPAPER(uint port, uint state, DateTime time) { onSensor(PAPER); }
         public static void onSensorMisc(uint port, uint state, DateTime time) { onSensor(MISC); }
         public static void onSensor(short activedSensor)
         {
