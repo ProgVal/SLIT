@@ -39,67 +39,81 @@ namespace MFConsoleApplication1
     public class Program
     {
         /***********************************************************************
+         * tests related stuff
+        ***********************************************************************/
+        const bool TEST = false;
+        static string testLogs = "";
+        static int testErrorCount = 0;
+
+        /***********************************************************************
          * "Classic" attributes
         ***********************************************************************/
-        static Thread currentStatusDisabler;
+        static Thread timeoutThread;
+        static Thread topMotorThread;
+        static Thread sortMotorThread;
+
         /***********************************************************************
          * Constants
         ***********************************************************************/
-        // Constants used for buttons and sensors arrays
+        // Constants used for arrays
         const short PLASTIC = 0;
         const short METAL = 1;
         const short PAPER = 2;
-        const short MISC = 3;
-        const short NUMBER_OF_SENSORS = 4;
+        const short NUMBER_OF_BUTTONS = 3;
 
-        // Constants use for leds array
-        const short PUBLIC_NO_STATE = -1;
-        const short PUBLIC_ERROR = 0;
-        const short PUBLIC_WAITING = 1;
-        const short PUBLIC_OK = 2;
-        const short NUMBER_OF_PUBLIC_STATES = 3;
+        const short SENSOR_PAPER_BASKET = 0;
+        const short SENSOR_TOP = 1;
+        const short SENSOR_INDUCTIVE = 2;
+        const short NUMBER_OF_SENSORS = 3;
 
-        // Constants depending on the hardware
-        const short FIRST_BUTTON_NUMBER = 0;
-        const short FIRST_SENSOR_NUMBER = 4;
-        const short FIRST_LED_NUMBER = 14;
+        // Constants used for motor events
+        const short MOTOR_TOP = 0;
+        const short MOTOR_SORT = 1;
+        const short NUMBER_OF_MOTORS = 2;
 
-        // Arrays
-        static InterruptPort[] buttons = new InterruptPort[NUMBER_OF_SENSORS];
+        const short MOTOR_RIGHT = 0;
+        const short MOTOR_LEFT = 1;
+        const short MOTOR_STOP = 2;
+        const short NUMBER_OF_PORTS_PER_MOTOR = 2;
+
+        // Ports
+        static InterruptPort[] buttons = new InterruptPort[NUMBER_OF_BUTTONS];
         static InterruptPort[] sensors = new InterruptPort[NUMBER_OF_SENSORS];
-        static OutputPort[] leds = new OutputPort[NUMBER_OF_PUBLIC_STATES];
+        static OutputPort[][] motors = new OutputPort[NUMBER_OF_MOTORS][];
+
+        // Sounds
+        static short SOUND_NONE = 0;
+        static short SOUND_WAITING = 1;
+        static short SOUND_NOT_YET = 2; // Shouldn't have pressed a button yet
+        static short SOUND_OK = 3;
+        static short SOUND_ERROR = 4;
 
         // Internal state stuff
         const short INTERNAL_SLEEPING = 0;
-        const short INTERNAL_WAITING_FOR_SENSOR = 1;
-        const short INTERNAL_WAITING_FOR_BUTTON = 2;
-        const short INTERNAL_WORKING = 3; // Used to be more thread-safe
-        const short INTERNAL_NOTIFYING = 4; // Intermediate state between WORKING and SLEEPING
+        const short INTERNAL_FALLING = 1;
+        const short INTERNAL_WAITING_FOR_BUTTON = 3;
         static short currentState = INTERNAL_SLEEPING;
-        static short expectedId; // Actually, it is the ID of the latest pressed button or activated sensor
+        static short objectType;
 
-        // Timeouts
-        static int[] TIMEOUTS = new int[NUMBER_OF_PUBLIC_STATES];
+        // Timeouts (in milliseconds)
+        static int TIMEOUT = 10000;
+        static int TIME_OPEN_MOTOR_TOP = 3000;
+        static int TIME_CLOSE_MOTOR_TOP = 3000;
+        static int TIME_PLASTIC_DOWN = 3000;
+        static int TIME_PLASTIC_UP = 3000;
+        static int TIME_METAL_DOWN = 3000;
+        static int TIME_METAL_UP = 3000;
+        static int TIMEOUT_DETECT_AS_PLASTIC = 2000; // If the top board opened, and this timer ends without any other event, we consider the object type is PLASTIC
 
+        /***********************************************************************
+         * Initialization
+        ***********************************************************************/
         public static void Main()
         {
-            TIMEOUTS[PUBLIC_ERROR] = 10000;
-            TIMEOUTS[PUBLIC_WAITING] = 10000;
-            TIMEOUTS[PUBLIC_OK] = 10000;
-
-
-            initializePorts();
-
-            // Signal startup to the operator (12 has been arbitrary choosen)
-            for (int i = 0; i < 12; i++)
-            {
-                for (int j = 0; j < NUMBER_OF_PUBLIC_STATES; j++)
-                {
-                    leds[j].Write(!leds[j].Read());
-                }
-                Thread.Sleep(100);
-            }
-
+            if (TEST)
+                test();
+            else
+                initializePorts();
             Thread.Sleep(Timeout.Infinite);
         }
         public static void initializePorts()
@@ -110,113 +124,335 @@ namespace MFConsoleApplication1
             Microsoft.SPOT.Hardware.Cpu.GlitchFilterTime = new TimeSpan(0, 0, 0, 0, 400);
 
             // Initialize the buttons
-            buttons[PLASTIC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di0, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            buttons[METAL] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di1, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            buttons[PAPER] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di2, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            buttons[MISC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di3, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            buttons[PLASTIC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di4, true,Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            buttons[METAL] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di5, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            buttons[PAPER] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di6, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
 
             // Initialize the button interruptions
             buttons[PLASTIC].OnInterrupt += new NativeEventHandler(onButtonPlastic);
             buttons[METAL].OnInterrupt += new NativeEventHandler(onButtonMetal);
-            buttons[PAPER].OnInterrupt += new NativeEventHandler(onButtonPAPER);
-            buttons[MISC].OnInterrupt += new NativeEventHandler(onButtonMisc);
+            buttons[PAPER].OnInterrupt += new NativeEventHandler(onButtonPaper);
 
 
             // Initialize the sensors
-            sensors[PLASTIC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di4, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            sensors[METAL] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di5, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            sensors[PAPER] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di6, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            sensors[MISC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di7, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            sensors[SENSOR_PAPER_BASKET] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di0, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            sensors[SENSOR_TOP] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di1, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            sensors[SENSOR_INDUCTIVE] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di12, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
 
             // Initialize the sensors interruptions:
-            sensors[PLASTIC].OnInterrupt += new NativeEventHandler(onSensorPlastic);
-            sensors[METAL].OnInterrupt += new NativeEventHandler(onSensorMetal);
-            sensors[PAPER].OnInterrupt += new NativeEventHandler(onSensorPAPER);
-            sensors[MISC].OnInterrupt += new NativeEventHandler(onSensorMisc);
+            sensors[SENSOR_PAPER_BASKET].OnInterrupt += new NativeEventHandler(onSensorPaperBasket);
+            sensors[SENSOR_TOP].OnInterrupt += new NativeEventHandler(onSensorTop);
+            sensors[SENSOR_INDUCTIVE].OnInterrupt += new NativeEventHandler(onSensorInductive);
 
-            // Initiliaze the status LEDs (used for debugging purpose)
-            leds[PUBLIC_ERROR] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.An0, false);
-            leds[PUBLIC_WAITING] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.An1, false);
-            leds[PUBLIC_OK] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.An2, false);
+            // Initialize the motors
+            motors[MOTOR_TOP] = new OutputPort[NUMBER_OF_PORTS_PER_MOTOR];
+            motors[MOTOR_SORT] = new OutputPort[NUMBER_OF_PORTS_PER_MOTOR];
+            motors[MOTOR_TOP][MOTOR_LEFT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di8, false);
+            motors[MOTOR_TOP][MOTOR_RIGHT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di9, false);
+            motors[MOTOR_SORT][MOTOR_LEFT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di11, false);
+            motors[MOTOR_SORT][MOTOR_RIGHT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di10, false);
         }
+
+        /***********************************************************************
+         * Buttons handling
+        ***********************************************************************/
         public static void onButtonPlastic(uint port, uint state, DateTime time) { onButton(PLASTIC); }
         public static void onButtonMetal(uint port, uint state, DateTime time) { onButton(METAL); }
-        public static void onButtonPAPER(uint port, uint state, DateTime time) { onButton(PAPER); }
-        public static void onButtonMisc(uint port, uint state, DateTime time) { onButton(MISC); }
-        public static void onButton(short pressedButton)
+        public static void onButtonPaper(uint port, uint state, DateTime time) { onButton(PAPER); }
+        public static void onButton(short id)
         {
             if (currentState == INTERNAL_WAITING_FOR_BUTTON)
             {
-                currentState = INTERNAL_NOTIFYING;
-                if (pressedButton == expectedId)
-                    notify(PUBLIC_OK);
+                if (id == objectType)
+                    playSound(SOUND_OK);
                 else
-                    notify(PUBLIC_ERROR);
+                    playSound(SOUND_ERROR);
             }
             else
-            {
-                currentState = INTERNAL_WAITING_FOR_SENSOR;
-                expectedId = pressedButton;
-                notify(PUBLIC_WAITING);
-            }
-            waitAndDisableStatus();
-        }
-        public static void onSensorPlastic(uint port, uint state, DateTime time) { onSensor(PLASTIC); }
-        public static void onSensorMetal(uint port, uint state, DateTime time) { onSensor(METAL); }
-        public static void onSensorPAPER(uint port, uint state, DateTime time) { onSensor(PAPER); }
-        public static void onSensorMisc(uint port, uint state, DateTime time) { onSensor(MISC); }
-        public static void onSensor(short activedSensor)
-        {
-            if (currentState == INTERNAL_WAITING_FOR_SENSOR)
-            {
-                currentState = INTERNAL_NOTIFYING;
-                if (activedSensor == expectedId)
-                    notify(PUBLIC_OK);
-                else
-                    notify(PUBLIC_ERROR);
-            }
-            else
-            {
-                currentState = INTERNAL_WAITING_FOR_BUTTON;
-                expectedId = activedSensor;
-                notify(PUBLIC_WAITING);
-            }
-            waitAndDisableStatus();
-        }
-        public static void notify(short state)
-        {
-            // Used mainly for debugging purpose
-            for (int i = 0; i < NUMBER_OF_PUBLIC_STATES; i++)
-                leds[i].Write(false);
-            if (0 <= state && state < NUMBER_OF_PUBLIC_STATES)
-                leds[state].Write(true);
+                playSound(SOUND_NOT_YET);
         }
 
-        public static void waitAndDisableStatus()
+        /***********************************************************************
+         * Sound handling
+        ***********************************************************************/
+        public static void playSound(short id)
         {
-            Thread thread = new Thread(_waitAndDisableStatus);
-            try
-            {
-                currentStatusDisabler.Abort();
-            }
-            catch (NullReferenceException) { } // No thread currently running
-            catch (ThreadAbortException) { } // This shouldn't happen, but we use it, just in case
-            currentStatusDisabler = thread;
-            thread.Start();
+            // TODO: really implement this
+
+            if (id == SOUND_OK)
+                testLog("Sound: ok");
+            else if (id == SOUND_NOT_YET)
+                testLog("Sound: not yet");
+            else if (id == SOUND_ERROR)
+                testLog("Sound: error");
+            else if (id == SOUND_WAITING)
+                testLog("Sound: waiting");
+            else
+                testLog("Sound: unknown");
         }
-        public static void _waitAndDisableStatus()
+        /***********************************************************************
+         * Sensors handling
+        ***********************************************************************/
+        public static void onSensorTop(uint port, uint state, DateTime time)
         {
-            short publicState = -1;
-            for (short i = 0; i < NUMBER_OF_PUBLIC_STATES; i++)
-                publicState = i;
-            if (publicState == -1)
-                // Why was the function called? oO
+            currentState = INTERNAL_FALLING;
+            setToPlasticIfDetectionTimesOut();
+            if (TEST)
+                testLog("Motor: top, left, right, stop");
+            else
+            {
+                Thread thread = new Thread(_onSensorTop);
+                try
+                {
+                    topMotorThread.Abort();
+                }
+                catch (NullReferenceException) { } // No thread currently running
+                catch (ThreadAbortException) { }
+            }
+        }
+        public static void _onSensorTop()
+        {
+            changeMotorStatus(MOTOR_TOP, MOTOR_LEFT);
+            Thread.Sleep(TIME_OPEN_MOTOR_TOP);
+            changeMotorStatus(MOTOR_TOP, MOTOR_RIGHT);
+            Thread.Sleep(TIME_CLOSE_MOTOR_TOP);
+            changeMotorStatus(MOTOR_TOP, MOTOR_STOP);
+        }
+        public static void onSensorPaperBasket(uint port, uint state, DateTime time)
+        {
+            typeDetected(PAPER);
+        }
+        public static void onSensorInductive(uint port, uint state, DateTime time)
+        {
+            typeDetected(METAL);
+            if (TEST)
+                testLog("Motor: sort, left, right, stop");
+            else
+            {
+                Thread thread = new Thread(_onSensorInductive);
+                try
+                {
+                    topMotorThread.Abort();
+                }
+                catch (NullReferenceException) { } // No thread currently running
+                catch (ThreadAbortException) { }
+            }
+        }
+        public static void _onSensorInductive()
+        {
+            changeMotorStatus(MOTOR_SORT, MOTOR_LEFT);
+            Thread.Sleep(TIME_METAL_DOWN);
+            changeMotorStatus(MOTOR_SORT, MOTOR_RIGHT);
+            Thread.Sleep(TIME_METAL_UP);
+            changeMotorStatus(MOTOR_SORT, MOTOR_STOP);
+        }
+
+        /***********************************************************************
+         * Plastic detection (by timeout)
+        ***********************************************************************/
+        public static void setToPlasticIfDetectionTimesOut()
+        {
+            if (TEST)
+                testLog("Thread: _setToPlasticIfDetectionTimesOut");
+            else
+            {
+                Thread thread = new Thread(_setToPlasticIfDetectionTimesOut);
+                try
+                {
+                    timeoutThread.Abort();
+                }
+                catch (NullReferenceException) { } // No thread currently running
+                catch (ThreadAbortException) { } // This shouldn't happen, but we use it, just in case
+                timeoutThread = thread;
+                thread.Start();
+            }
+        }
+        public static void _setToPlasticIfDetectionTimesOut()
+        {
+            if (TEST)
+            {
+                typeDetected(PLASTIC);
+                testLog("Motor: sort, right, left, stop");
+            }
+            else
+            {
+                Thread.Sleep(TIMEOUT_DETECT_AS_PLASTIC);
+                typeDetected(PLASTIC);
+                changeMotorStatus(MOTOR_SORT, MOTOR_RIGHT);
+                Thread.Sleep(TIME_PLASTIC_DOWN);
+                changeMotorStatus(MOTOR_SORT, MOTOR_LEFT);
+                Thread.Sleep(TIME_PLASTIC_UP);
+                changeMotorStatus(MOTOR_SORT, MOTOR_STOP);
+                timeoutThread = null;
+            }
+        }
+
+        /***********************************************************************
+         * Utility functions
+        ***********************************************************************/
+        public static void typeDetected(short id)
+        {
+            objectType = id;
+            currentState = INTERNAL_WAITING_FOR_BUTTON;
+            playSound(SOUND_WAITING);
+        }
+
+        public static void changeMotorStatus(short motorId, short status)
+        {
+            if (status == MOTOR_STOP)
+            {
+                motors[motorId][MOTOR_LEFT].Write(false);
+                motors[motorId][MOTOR_RIGHT].Write(false);
+            }
+            else if (status == MOTOR_LEFT)
+            {
+                motors[motorId][MOTOR_RIGHT].Write(false);
+                motors[motorId][MOTOR_LEFT].Write(true);
+            }
+            else if (status == MOTOR_RIGHT)
+            {
+                motors[motorId][MOTOR_RIGHT].Write(true);
+                motors[motorId][MOTOR_LEFT].Write(false);
+            }
+            else
+            {
+                // We should not be there.
                 return;
-            Thread.Sleep(TIMEOUTS[publicState]);
-            for (short i = 0; i < NUMBER_OF_PUBLIC_STATES; i++)
-                leds[i].Write(false);
+            }
+        }
+
+
+
+
+
+        /***********************************************************************
+         * Test cases
+        ***********************************************************************/
+        public static void testLog(string log)
+        {
+            if (TEST)
+                testLogs += log + '|';
+        }
+        public static void test()
+        {
+            Debug.Print("Starting test cases");
+            testPressAtTheWrongTimeFails();
+            testButtons();
+            testPaperHandling();
+            testMetalHandling();
+            testPlasticHandling();
+            Debug.Print("All test cases run");
+            Debug.Print(testErrorCount.ToString() + " failures.");
+        }
+        public static void testInitCase(string name)
+        {
+            Debug.Print(" +======================================================");
+            Debug.Print(" | " + name);
+            Debug.Print(" +------------------------------------------------------");
+        }
+        public static void testCloseCase()
+        {
+            Debug.Print(" +======================================================");
+            Debug.Print(" ");
+        }
+        public static void testResetState()
+        {
             currentState = INTERNAL_SLEEPING;
-            currentStatusDisabler = null;
+            timeoutThread = null;
+            topMotorThread = null;
+            sortMotorThread = null;
+
+        }
+        public static void testAssertLog(string expected)
+        {
+            if (testLogs != expected)
+            {
+                Debug.Print(" | Error: expected '" + expected + "' but got '" + testLogs + "'.");
+                testErrorCount++;
+            }
+            else
+                Debug.Print(" | Ok.");
+            testLogs = "";
+        }
+        public static void testPressAtTheWrongTimeFails()
+        {
+            testInitCase("Error message if button pressed at the wrong time");
+            DateTime datetime = new DateTime();
+            onButtonMetal(0, 0, datetime);
+            testAssertLog("Sound: not yet|");
+            testResetState();
+            onButtonPlastic(0, 0, datetime);
+            testAssertLog("Sound: not yet|");
+            testResetState();
+            onButtonPaper(0, 0, datetime);
+            testAssertLog("Sound: not yet|");
+            testResetState();
+
+            onSensorTop(0, 0, datetime);
+            onButtonMetal(0, 0, datetime);
+            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|Sound: not yet|");
+            testResetState();
+            onSensorTop(0, 0, datetime);
+            onButtonPlastic(0, 0, datetime);
+            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|Sound: not yet|");
+            testResetState();
+            onSensorTop(0, 0, datetime);
+            onButtonPaper(0, 0, datetime);
+            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|Sound: not yet|");
+            testResetState();
+
+            testCloseCase();
+        }
+        public static void testButtons()
+        {
+            testInitCase("Buttons");
+            DateTime datetime = new DateTime();
+
+            onSensorTop(0, 0, datetime);
+            onSensorPaperBasket(0, 0, datetime);
+            testLogs = "";
+            onButtonPaper(0, 0, datetime);
+            testAssertLog("Sound: ok|");
+            testResetState();
+
+            onSensorTop(0, 0, datetime);
+            onSensorPaperBasket(0, 0, datetime);
+            testLogs = "";
+            onButtonMetal(0, 0, datetime);
+            testAssertLog("Sound: error|");
+            testResetState();
+
+            testCloseCase();
+        }
+        public static void testPaperHandling()
+        {
+            testInitCase("Paper handling");
+            DateTime datetime = new DateTime();
+            onSensorTop(0, 0, datetime);
+            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|");
+            onSensorPaperBasket(0, 0, datetime);
+            testAssertLog("Sound: waiting|");
+            testCloseCase();
+        }
+        public static void testMetalHandling()
+        {
+            testInitCase("Metal handling");
+            DateTime datetime = new DateTime();
+            onSensorTop(0, 0, datetime);
+            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|");
+            onSensorInductive(0, 0, datetime);
+            testAssertLog("Sound: waiting|Motor: sort, left, right, stop|");
+            testCloseCase();
+        }
+        public static void testPlasticHandling()
+        {
+            testInitCase("Plastic handling");
+            DateTime datetime = new DateTime();
+            onSensorTop(0, 0, datetime);
+            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|");
+            _setToPlasticIfDetectionTimesOut();
+            testAssertLog("Sound: waiting|Motor: sort, right, left, stop|");
+            testCloseCase();
         }
     }
 }

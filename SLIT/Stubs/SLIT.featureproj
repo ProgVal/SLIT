@@ -2,7 +2,7 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <FeatureName>SLIT</FeatureName>
-    <Guid>{cd802909-adfc-431f-a8e8-b2b3a4a37e0f}</Guid>
+    <Guid>{9064f929-f80a-4c16-97e9-c0cd236ab5c3}</Guid>
     <Description />
     <Groups />
   </PropertyGroup>
