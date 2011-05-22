@@ -41,14 +41,15 @@ namespace MFConsoleApplication1
         /***********************************************************************
          * tests related stuff
         ***********************************************************************/
-        const bool TEST = false;
+        const bool TEST = true;
         static string testLogs = "";
         static int testErrorCount = 0;
 
         /***********************************************************************
          * "Classic" attributes
         ***********************************************************************/
-        static Thread timeoutThread;
+        static Thread threadSetToPaper;
+        static Thread threadSetToPlastic;
         static Thread topMotorThread;
         static Thread sortMotorThread;
 
@@ -61,7 +62,7 @@ namespace MFConsoleApplication1
         const short PAPER = 2;
         const short NUMBER_OF_BUTTONS = 3;
 
-        const short SENSOR_PAPER_BASKET = 0;
+        const short SENSOR_SORT = 0;
         const short SENSOR_TOP = 1;
         const short SENSOR_INDUCTIVE = 2;
         const short NUMBER_OF_SENSORS = 3;
@@ -91,29 +92,40 @@ namespace MFConsoleApplication1
         // Internal state stuff
         const short INTERNAL_SLEEPING = 0;
         const short INTERNAL_FALLING = 1;
+        const short INTERNAL_PUT_ON_SORT_BOARD = 2;
         const short INTERNAL_WAITING_FOR_BUTTON = 3;
         static short currentState = INTERNAL_SLEEPING;
         static short objectType;
 
         // Timeouts (in milliseconds)
-        static int TIMEOUT = 10000;
-        static int TIME_OPEN_MOTOR_TOP = 3000;
-        static int TIME_CLOSE_MOTOR_TOP = 3000;
-        static int TIME_PLASTIC_DOWN = 3000;
-        static int TIME_PLASTIC_UP = 3000;
-        static int TIME_METAL_DOWN = 3000;
-        static int TIME_METAL_UP = 3000;
-        static int TIMEOUT_DETECT_AS_PLASTIC = 2000; // If the top board opened, and this timer ends without any other event, we consider the object type is PLASTIC
+        static int TIMEOUT = 1000;
+        static int TIME_OPEN_MOTOR_TOP = 1000;
+        static int TIME_CLOSE_MOTOR_TOP = 1000;
+        static int TIME_PLASTIC_DOWN = 1000;
+        static int TIME_PLASTIC_UP = 1000;
+        static int TIME_METAL_DOWN = 1000;
+        static int TIME_METAL_UP = 1000;
+        static int TIMEOUT_DETECT_AS_PAPER = 2000; // If the top board opened, and this timer ends without any other event, we consider the object type is PLASTIC
+        static int TIMEOUT_DETECT_AS_PLASTIC = 2000;
 
         /***********************************************************************
          * Initialization
         ***********************************************************************/
         public static void Main()
         {
+            OutputPort LED;
+            LED = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.LED, true);
+            for (int i=0; i<20; i++)
+            {
+                LED.Write(!LED.Read());
+                Thread.Sleep(100);
+            }
             if (TEST)
                 test();
             else
                 initializePorts();
+
+            
             Thread.Sleep(Timeout.Infinite);
         }
         public static void initializePorts()
@@ -124,9 +136,9 @@ namespace MFConsoleApplication1
             Microsoft.SPOT.Hardware.Cpu.GlitchFilterTime = new TimeSpan(0, 0, 0, 0, 400);
 
             // Initialize the buttons
-            buttons[PLASTIC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di4, true,Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            buttons[METAL] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di5, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            buttons[PAPER] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di6, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            buttons[PLASTIC] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di4, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeLow);
+            buttons[METAL] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di5, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeLow);
+            buttons[PAPER] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di6, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeLow);
 
             // Initialize the button interruptions
             buttons[PLASTIC].OnInterrupt += new NativeEventHandler(onButtonPlastic);
@@ -135,30 +147,33 @@ namespace MFConsoleApplication1
 
 
             // Initialize the sensors
-            sensors[SENSOR_PAPER_BASKET] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di0, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            sensors[SENSOR_TOP] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di1, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
-            sensors[SENSOR_INDUCTIVE] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di12, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeHigh);
+            sensors[SENSOR_SORT] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di0, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeLow);
+            sensors[SENSOR_TOP] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di1, true, Port.ResistorMode.PullUp, Port.InterruptMode.InterruptEdgeLow);
+            sensors[SENSOR_INDUCTIVE] = new InterruptPort((Cpu.Pin)FEZ_Pin.Interrupt.Di12, true, Port.ResistorMode.PullDown, Port.InterruptMode.InterruptEdgeHigh);
 
             // Initialize the sensors interruptions:
-            sensors[SENSOR_PAPER_BASKET].OnInterrupt += new NativeEventHandler(onSensorPaperBasket);
+            sensors[SENSOR_SORT].OnInterrupt += new NativeEventHandler(onSensorSort);
             sensors[SENSOR_TOP].OnInterrupt += new NativeEventHandler(onSensorTop);
             sensors[SENSOR_INDUCTIVE].OnInterrupt += new NativeEventHandler(onSensorInductive);
 
             // Initialize the motors
             motors[MOTOR_TOP] = new OutputPort[NUMBER_OF_PORTS_PER_MOTOR];
             motors[MOTOR_SORT] = new OutputPort[NUMBER_OF_PORTS_PER_MOTOR];
-            motors[MOTOR_TOP][MOTOR_LEFT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di8, false);
-            motors[MOTOR_TOP][MOTOR_RIGHT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di9, false);
-            motors[MOTOR_SORT][MOTOR_LEFT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di11, false);
-            motors[MOTOR_SORT][MOTOR_RIGHT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di10, false);
+            motors[MOTOR_SORT][MOTOR_LEFT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di8, false);
+            motors[MOTOR_SORT][MOTOR_RIGHT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di9, false);
+            motors[MOTOR_TOP][MOTOR_LEFT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di11, false);
+            motors[MOTOR_TOP][MOTOR_RIGHT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di10, false);
         }
 
         /***********************************************************************
          * Buttons handling
         ***********************************************************************/
-        public static void onButtonPlastic(uint port, uint state, DateTime time) { onButton(PLASTIC); }
-        public static void onButtonMetal(uint port, uint state, DateTime time) { onButton(METAL); }
-        public static void onButtonPaper(uint port, uint state, DateTime time) { onButton(PAPER); }
+        public static void onButtonPlastic(uint port, uint state, DateTime time) { 
+            onButton(PLASTIC); }
+        public static void onButtonMetal(uint port, uint state, DateTime time) {
+            onButton(METAL); }
+        public static void onButtonPaper(uint port, uint state, DateTime time) { 
+            onButton(PAPER); }
         public static void onButton(short id)
         {
             if (currentState == INTERNAL_WAITING_FOR_BUTTON)
@@ -196,18 +211,18 @@ namespace MFConsoleApplication1
         public static void onSensorTop(uint port, uint state, DateTime time)
         {
             currentState = INTERNAL_FALLING;
-            setToPlasticIfDetectionTimesOut();
+            setToPaperIfDetectionTimesOut();
             if (TEST)
                 testLog("Motor: top, left, right, stop");
             else
             {
-                Thread thread = new Thread(_onSensorTop);
                 try
                 {
-                    topMotorThread.Abort();
+                    if (topMotorThread != null)
+                        topMotorThread.Abort();
                 }
-                catch (NullReferenceException) { } // No thread currently running
                 catch (ThreadAbortException) { }
+                topMotorThread = new Thread(_onSensorTop);
             }
         }
         public static void _onSensorTop()
@@ -218,9 +233,20 @@ namespace MFConsoleApplication1
             Thread.Sleep(TIME_CLOSE_MOTOR_TOP);
             changeMotorStatus(MOTOR_TOP, MOTOR_STOP);
         }
-        public static void onSensorPaperBasket(uint port, uint state, DateTime time)
+        public static void onSensorSort(uint port, uint state, DateTime time)
         {
-            typeDetected(PAPER);
+            /*
+            if (threadSetToPaper != null)
+            {
+                threadSetToPaper.Abort();
+                threadSetToPaper = null;
+            }
+            */
+            if (currentState == INTERNAL_FALLING)
+                currentState = INTERNAL_PUT_ON_SORT_BOARD;
+            else if (currentState == INTERNAL_WAITING_FOR_BUTTON) // Inductive sensor interrupt raised before this one
+            { }
+            setToPlasticIfDetectionTimesOut();
         }
         public static void onSensorInductive(uint port, uint state, DateTime time)
         {
@@ -229,13 +255,15 @@ namespace MFConsoleApplication1
                 testLog("Motor: sort, left, right, stop");
             else
             {
-                Thread thread = new Thread(_onSensorInductive);
+                /*
                 try
                 {
-                    topMotorThread.Abort();
+                    if (sortMotorThread != null)
+                        sortMotorThread.Abort();
                 }
-                catch (NullReferenceException) { } // No thread currently running
                 catch (ThreadAbortException) { }
+                */
+                sortMotorThread = new Thread(_onSensorInductive);
             }
         }
         public static void _onSensorInductive()
@@ -252,39 +280,63 @@ namespace MFConsoleApplication1
         ***********************************************************************/
         public static void setToPlasticIfDetectionTimesOut()
         {
-            if (TEST)
-                testLog("Thread: _setToPlasticIfDetectionTimesOut");
-            else
+            /*
+            try
             {
-                Thread thread = new Thread(_setToPlasticIfDetectionTimesOut);
-                try
-                {
-                    timeoutThread.Abort();
-                }
-                catch (NullReferenceException) { } // No thread currently running
-                catch (ThreadAbortException) { } // This shouldn't happen, but we use it, just in case
-                timeoutThread = thread;
-                thread.Start();
+                if (threadSetToPlastic != null)
+                    threadSetToPlastic.Abort();
             }
+            catch (NullReferenceException) { } // No thread currently running
+            catch (ThreadAbortException) { } // This shouldn't happen, but we use it, just in case
+            */
+            threadSetToPlastic = new Thread(_setToPlasticIfDetectionTimesOut);
+            threadSetToPlastic.Start();
         }
         public static void _setToPlasticIfDetectionTimesOut()
         {
-            if (TEST)
+            Thread.Sleep(TIMEOUT_DETECT_AS_PLASTIC);
+            if (currentState == INTERNAL_PUT_ON_SORT_BOARD)
             {
                 typeDetected(PLASTIC);
-                testLog("Motor: sort, right, left, stop");
-            }
-            else
-            {
-                Thread.Sleep(TIMEOUT_DETECT_AS_PLASTIC);
-                typeDetected(PLASTIC);
+                currentState = INTERNAL_WAITING_FOR_BUTTON;
+                if (TEST)
+                    testLog("Motor: sort, right, left, stop");
+
                 changeMotorStatus(MOTOR_SORT, MOTOR_RIGHT);
                 Thread.Sleep(TIME_PLASTIC_DOWN);
                 changeMotorStatus(MOTOR_SORT, MOTOR_LEFT);
                 Thread.Sleep(TIME_PLASTIC_UP);
                 changeMotorStatus(MOTOR_SORT, MOTOR_STOP);
-                timeoutThread = null;
             }
+
+            threadSetToPlastic = null;
+        }
+
+        /***********************************************************************
+         * Paper detection (by timeout)
+        ***********************************************************************/
+        public static void setToPaperIfDetectionTimesOut()
+        {
+            /*
+            try
+            {
+                if (threadSetToPaper != null)
+                    threadSetToPaper.Abort();
+            }
+            catch (ThreadAbortException) { } // This shouldn't happen, but we use it, just in case
+            */
+            threadSetToPaper = new Thread(_setToPaperIfDetectionTimesOut);
+            threadSetToPaper.Start();
+        }
+        public static void _setToPaperIfDetectionTimesOut()
+        {
+            Thread.Sleep(TIMEOUT_DETECT_AS_PAPER);
+            if (currentState == INTERNAL_FALLING)
+            {
+                typeDetected(PAPER);
+                currentState = INTERNAL_WAITING_FOR_BUTTON;
+            }
+            threadSetToPaper = null;
         }
 
         /***********************************************************************
@@ -299,6 +351,8 @@ namespace MFConsoleApplication1
 
         public static void changeMotorStatus(short motorId, short status)
         {
+            if (TEST)
+                return;
             if (status == MOTOR_STOP)
             {
                 motors[motorId][MOTOR_LEFT].Write(false);
@@ -311,8 +365,8 @@ namespace MFConsoleApplication1
             }
             else if (status == MOTOR_RIGHT)
             {
-                motors[motorId][MOTOR_RIGHT].Write(true);
                 motors[motorId][MOTOR_LEFT].Write(false);
+                motors[motorId][MOTOR_RIGHT].Write(true);
             }
             else
             {
@@ -358,10 +412,10 @@ namespace MFConsoleApplication1
         public static void testResetState()
         {
             currentState = INTERNAL_SLEEPING;
-            timeoutThread = null;
+            threadSetToPaper = null;
             topMotorThread = null;
             sortMotorThread = null;
-
+            objectType = -1;
         }
         public static void testAssertLog(string expected)
         {
@@ -390,15 +444,15 @@ namespace MFConsoleApplication1
 
             onSensorTop(0, 0, datetime);
             onButtonMetal(0, 0, datetime);
-            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|Sound: not yet|");
+            testAssertLog("Motor: top, left, right, stop|Sound: not yet|");
             testResetState();
             onSensorTop(0, 0, datetime);
             onButtonPlastic(0, 0, datetime);
-            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|Sound: not yet|");
+            testAssertLog("Motor: top, left, right, stop|Sound: not yet|");
             testResetState();
             onSensorTop(0, 0, datetime);
             onButtonPaper(0, 0, datetime);
-            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|Sound: not yet|");
+            testAssertLog("Motor: top, left, right, stop|Sound: not yet|");
             testResetState();
 
             testCloseCase();
@@ -409,16 +463,40 @@ namespace MFConsoleApplication1
             DateTime datetime = new DateTime();
 
             onSensorTop(0, 0, datetime);
-            onSensorPaperBasket(0, 0, datetime);
+            Thread.Sleep(3000);
             testLogs = "";
             onButtonPaper(0, 0, datetime);
             testAssertLog("Sound: ok|");
             testResetState();
 
             onSensorTop(0, 0, datetime);
-            onSensorPaperBasket(0, 0, datetime);
+            onSensorSort(0, 0, datetime);
+            Thread.Sleep(3000);
+            testLogs = "";
+            onButtonPlastic(0, 0, datetime);
+            testAssertLog("Sound: ok|");
+            testResetState();
+
+            onSensorTop(0, 0, datetime);
+            onSensorSort(0, 0, datetime);
+            Thread.Sleep(3000);
             testLogs = "";
             onButtonMetal(0, 0, datetime);
+            testAssertLog("Sound: error|");
+            testResetState();
+
+            onSensorTop(0, 0, datetime);
+            onSensorSort(0, 0, datetime);
+            onSensorInductive(0, 0, datetime);
+            testLogs = "";
+            onButtonMetal(0, 0, datetime);
+            testAssertLog("Sound: ok|");
+
+            onSensorTop(0, 0, datetime);
+            onSensorSort(0, 0, datetime);
+            onSensorInductive(0, 0, datetime);
+            testLogs = "";
+            onButtonPlastic(0, 0, datetime);
             testAssertLog("Sound: error|");
             testResetState();
 
@@ -429,8 +507,8 @@ namespace MFConsoleApplication1
             testInitCase("Paper handling");
             DateTime datetime = new DateTime();
             onSensorTop(0, 0, datetime);
-            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|");
-            onSensorPaperBasket(0, 0, datetime);
+            testAssertLog("Motor: top, left, right, stop|");
+            Thread.Sleep(3000);
             testAssertLog("Sound: waiting|");
             testCloseCase();
         }
@@ -439,7 +517,7 @@ namespace MFConsoleApplication1
             testInitCase("Metal handling");
             DateTime datetime = new DateTime();
             onSensorTop(0, 0, datetime);
-            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|");
+            testAssertLog("Motor: top, left, right, stop|");
             onSensorInductive(0, 0, datetime);
             testAssertLog("Sound: waiting|Motor: sort, left, right, stop|");
             testCloseCase();
@@ -449,8 +527,9 @@ namespace MFConsoleApplication1
             testInitCase("Plastic handling");
             DateTime datetime = new DateTime();
             onSensorTop(0, 0, datetime);
-            testAssertLog("Thread: _setToPlasticIfDetectionTimesOut|Motor: top, left, right, stop|");
-            _setToPlasticIfDetectionTimesOut();
+            testAssertLog("Motor: top, left, right, stop|");
+            onSensorSort(0, 0, datetime);
+            Thread.Sleep(3000);
             testAssertLog("Sound: waiting|Motor: sort, right, left, stop|");
             testCloseCase();
         }

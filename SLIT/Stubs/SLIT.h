@@ -15,27 +15,29 @@ struct Library_SLIT_MFConsoleApplication1_Program
 {
     static const int FIELD_STATIC__testLogs = 0;
     static const int FIELD_STATIC__testErrorCount = 1;
-    static const int FIELD_STATIC__timeoutThread = 2;
-    static const int FIELD_STATIC__topMotorThread = 3;
-    static const int FIELD_STATIC__sortMotorThread = 4;
-    static const int FIELD_STATIC__buttons = 5;
-    static const int FIELD_STATIC__sensors = 6;
-    static const int FIELD_STATIC__motors = 7;
-    static const int FIELD_STATIC__SOUND_NONE = 8;
-    static const int FIELD_STATIC__SOUND_WAITING = 9;
-    static const int FIELD_STATIC__SOUND_NOT_YET = 10;
-    static const int FIELD_STATIC__SOUND_OK = 11;
-    static const int FIELD_STATIC__SOUND_ERROR = 12;
-    static const int FIELD_STATIC__currentState = 13;
-    static const int FIELD_STATIC__objectType = 14;
-    static const int FIELD_STATIC__TIMEOUT = 15;
-    static const int FIELD_STATIC__TIME_OPEN_MOTOR_TOP = 16;
-    static const int FIELD_STATIC__TIME_CLOSE_MOTOR_TOP = 17;
-    static const int FIELD_STATIC__TIME_PLASTIC_DOWN = 18;
-    static const int FIELD_STATIC__TIME_PLASTIC_UP = 19;
-    static const int FIELD_STATIC__TIME_METAL_DOWN = 20;
-    static const int FIELD_STATIC__TIME_METAL_UP = 21;
-    static const int FIELD_STATIC__TIMEOUT_DETECT_AS_PLASTIC = 22;
+    static const int FIELD_STATIC__threadSetToPaper = 2;
+    static const int FIELD_STATIC__threadSetToPlastic = 3;
+    static const int FIELD_STATIC__topMotorThread = 4;
+    static const int FIELD_STATIC__sortMotorThread = 5;
+    static const int FIELD_STATIC__buttons = 6;
+    static const int FIELD_STATIC__sensors = 7;
+    static const int FIELD_STATIC__motors = 8;
+    static const int FIELD_STATIC__SOUND_NONE = 9;
+    static const int FIELD_STATIC__SOUND_WAITING = 10;
+    static const int FIELD_STATIC__SOUND_NOT_YET = 11;
+    static const int FIELD_STATIC__SOUND_OK = 12;
+    static const int FIELD_STATIC__SOUND_ERROR = 13;
+    static const int FIELD_STATIC__currentState = 14;
+    static const int FIELD_STATIC__objectType = 15;
+    static const int FIELD_STATIC__TIMEOUT = 16;
+    static const int FIELD_STATIC__TIME_OPEN_MOTOR_TOP = 17;
+    static const int FIELD_STATIC__TIME_CLOSE_MOTOR_TOP = 18;
+    static const int FIELD_STATIC__TIME_PLASTIC_DOWN = 19;
+    static const int FIELD_STATIC__TIME_PLASTIC_UP = 20;
+    static const int FIELD_STATIC__TIME_METAL_DOWN = 21;
+    static const int FIELD_STATIC__TIME_METAL_UP = 22;
+    static const int FIELD_STATIC__TIMEOUT_DETECT_AS_PAPER = 23;
+    static const int FIELD_STATIC__TIMEOUT_DETECT_AS_PLASTIC = 24;
 
 
     //--//
@@ -44,7 +46,7 @@ struct Library_SLIT_MFConsoleApplication1_Program
 
 struct Library_SLIT_MFConsoleApplication1_Resources
 {
-    static const int FIELD_STATIC__manager = 23;
+    static const int FIELD_STATIC__manager = 25;
 
 
     //--//
