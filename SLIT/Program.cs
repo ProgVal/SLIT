@@ -52,6 +52,8 @@ namespace MFConsoleApplication1
         static Thread threadSetToPlastic;
         static Thread topMotorThread;
         static Thread sortMotorThread;
+        static Thread soundResetThread;
+        static short soundCurrentId = -1;
 
         /***********************************************************************
          * Constants
@@ -77,17 +79,25 @@ namespace MFConsoleApplication1
         const short MOTOR_STOP = 2;
         const short NUMBER_OF_PORTS_PER_MOTOR = 2;
 
+        // Constants used for sound system
+        const short SOUND_PLAY = 0;
+        const short SOUND_NEXT = 1;
+        const short SOUND_RESET = 2;
+        const short NUMBER_OF_SOUND_CONTROLS = 3;
+
         // Ports
         static InterruptPort[] buttons = new InterruptPort[NUMBER_OF_BUTTONS];
         static InterruptPort[] sensors = new InterruptPort[NUMBER_OF_SENSORS];
         static OutputPort[][] motors = new OutputPort[NUMBER_OF_MOTORS][];
+        static OutputPort[] sound = new OutputPort[NUMBER_OF_SOUND_CONTROLS];
 
         // Sounds
-        static short SOUND_NONE = 0;
-        static short SOUND_WAITING = 1;
-        static short SOUND_NOT_YET = 2; // Shouldn't have pressed a button yet
-        static short SOUND_OK = 3;
-        static short SOUND_ERROR = 4;
+        static short SOUND_NONE = -1;
+        static short SOUND_WAITING = 0;
+        static short SOUND_OK = 1;
+        static short SOUND_ERROR = 2;
+        static short SOUND_NOT_YET = 3; // Shouldn't have pressed a button yet
+        static short[] SOUND_DURATION = { 2900, 2150, 2800, 3500 };
 
         // Internal state stuff
         const short INTERNAL_SLEEPING = 0;
@@ -99,14 +109,15 @@ namespace MFConsoleApplication1
 
         // Timeouts (in milliseconds)
         static int TIMEOUT = 1000;
-        static int TIME_OPEN_MOTOR_TOP = 1000;
-        static int TIME_CLOSE_MOTOR_TOP = 1000;
-        static int TIME_PLASTIC_DOWN = 1000;
-        static int TIME_PLASTIC_UP = 1000;
-        static int TIME_METAL_DOWN = 1000;
-        static int TIME_METAL_UP = 1000;
+        static int TIME_OPEN_MOTOR_TOP = 500;
+        static int TIME_CLOSE_MOTOR_TOP = 600;
+        static int TIME_PLASTIC_DOWN = 500;
+        static int TIME_PLASTIC_UP = 500;
+        static int TIME_METAL_DOWN = 500;
+        static int TIME_METAL_UP = 500;
         static int TIMEOUT_DETECT_AS_PAPER = 10000; // If the top board opened, and this timer ends without any other event, we consider the object type is PLASTIC
         static int TIMEOUT_DETECT_AS_PLASTIC = 3000;
+        static int DELAY_SOUND_SIGNAL = 150;
 
         /***********************************************************************
          * Initialization
@@ -115,24 +126,15 @@ namespace MFConsoleApplication1
         {
             OutputPort LED;
             LED = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.LED, true);
-            for (int i=0; i<20; i++)
+            for (int i=0; i<0*2; i++)
             {
                 LED.Write(!LED.Read());
                 Thread.Sleep(100);
             }
             if (TEST)
                 test();
-            else ;
-                //initializePorts();
-
-
-            OutputPort play = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.An1, false);
-            while (true)
-            {
-                play.Write(true);
-                play.Write(false);
-            }
-
+            else
+                initializePorts();
             
             Thread.Sleep(Timeout.Infinite);
         }
@@ -171,17 +173,22 @@ namespace MFConsoleApplication1
             motors[MOTOR_SORT][MOTOR_RIGHT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di9, false);
             motors[MOTOR_TOP][MOTOR_LEFT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di11, false);
             motors[MOTOR_TOP][MOTOR_RIGHT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.Di10, false);
+
+            // Initialize the sound controls
+            sound[SOUND_PLAY] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.An1, true);
+            sound[SOUND_NEXT] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.An2, true);
+            sound[SOUND_RESET] = new OutputPort((Cpu.Pin)FEZ_Pin.Digital.An3, true);
+            sound[SOUND_RESET].Write(false);
+            Thread.Sleep(DELAY_SOUND_SIGNAL);
+            sound[SOUND_RESET].Write(true);
         }
 
         /***********************************************************************
          * Buttons handling
         ***********************************************************************/
-        public static void onButtonPlastic(uint port, uint state, DateTime time) { 
-            onButton(PLASTIC); }
-        public static void onButtonMetal(uint port, uint state, DateTime time) {
-            onButton(METAL); }
-        public static void onButtonPaper(uint port, uint state, DateTime time) { 
-            onButton(PAPER); }
+        public static void onButtonPlastic(uint port, uint state, DateTime time) { onButton(PLASTIC); }
+        public static void onButtonMetal(uint port, uint state, DateTime time) { onButton(METAL); }
+        public static void onButtonPaper(uint port, uint state, DateTime time) { onButton(PAPER); }
         public static void onButton(short id)
         {
             if (currentState == INTERNAL_WAITING_FOR_BUTTON)
@@ -203,23 +210,47 @@ namespace MFConsoleApplication1
         ***********************************************************************/
         public static void playSound(short id)
         {
-            // TODO: really implement this
+            while (soundCurrentId != SOUND_NONE)
+                Thread.Sleep(100);
+            Debug.Print("Appel avec " + id.ToString());
 
-            String log;
-            if (id == SOUND_OK)
-                log = "Sound: ok";
-            else if (id == SOUND_NOT_YET)
-                log = "Sound: not yet";
-            else if (id == SOUND_ERROR)
-                log = "Sound: error";
-            else if (id == SOUND_WAITING)
-                log = "Sound: waiting";
-            else
-                log = "Sound: unknown";
+            sound[SOUND_RESET].Write(false);
+            Thread.Sleep(DELAY_SOUND_SIGNAL);
+            sound[SOUND_RESET].Write(true);
+            Thread.Sleep(DELAY_SOUND_SIGNAL);
+
+            sound[SOUND_PLAY].Write(false);
+            Thread.Sleep(DELAY_SOUND_SIGNAL);
+            sound[SOUND_PLAY].Write(true);
+            for (short i = 0; i < id; i++)
+            {
+                sound[SOUND_NEXT].Write(false);
+                Thread.Sleep(DELAY_SOUND_SIGNAL);
+                sound[SOUND_NEXT].Write(true);
+                Thread.Sleep(DELAY_SOUND_SIGNAL);
+            }
+
+            soundCurrentId = id;
+            Thread.Sleep(SOUND_DURATION[soundCurrentId]);
+            sound[SOUND_RESET].Write(false);
+            Thread.Sleep(DELAY_SOUND_SIGNAL);
+            sound[SOUND_RESET].Write(true);
+            Thread.Sleep(DELAY_SOUND_SIGNAL);
+            soundCurrentId = SOUND_NONE;
+
             if (TEST)
-                testLog(log);
-            else
-                Debug.Print(log);
+            {
+                if (id == SOUND_OK)
+                    testLog("Sound: ok");
+                else if (id == SOUND_NOT_YET)
+                    testLog("Sound: not yet");
+                else if (id == SOUND_ERROR)
+                    testLog("Sound: error");
+                else if (id == SOUND_WAITING)
+                    testLog("Sound: waiting");
+                else
+                    testLog("Sound: unknown");
+            }
         }
         /***********************************************************************
          * Sensors handling
@@ -316,14 +347,6 @@ namespace MFConsoleApplication1
         ***********************************************************************/
         public static void setToPaperIfDetectionTimesOut()
         {
-            /*
-            try
-            {
-                if (threadSetToPaper != null)
-                    threadSetToPaper.Abort();
-            }
-            catch (ThreadAbortException) { } // This shouldn't happen, but we use it, just in case
-            */
             threadSetToPaper = new Thread(_setToPaperIfDetectionTimesOut);
             threadSetToPaper.Start();
         }
